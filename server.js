@@ -12,7 +12,6 @@ const server = app.listen(port, () => {
 const wss = new WebSocket.Server({ server });
 
 let activeUsers = [];
-let clients = new Map(); // Kullanıcı adlarını WebSocket bağlantılarıyla eşle
 
 wss.on('connection', (ws) => {
   console.log('New client connected');
@@ -22,14 +21,30 @@ wss.on('connection', (ws) => {
     console.log('Received:', data);
 
     if (data.type === 'login') {
-      if (!activeUsers.includes(data.username)) {
+      if (activeUsers.includes(data.username)) {
+        // Kullanıcı adı zaten kullanılıyorsa, hata mesajı gönder
+        ws.send(JSON.stringify({ type: 'error', message: 'Username is already taken.' }));
+      } else {
         activeUsers.push(data.username);
+        ws.username = data.username;
+        // Başarı mesajı gönder
+        ws.send(JSON.stringify({ type: 'loginSuccess', username: data.username }));
+        // Aktif kullanıcı sayısını güncelle
+        const activeUsersMessage = JSON.stringify({ type: 'activeUsers', count: activeUsers.length });
+        wss.clients.forEach((client) => {
+          if (client.readyState === WebSocket.OPEN) {
+            client.send(activeUsersMessage);
+          }
+        });
       }
-      clients.set(data.username, ws); // Kullanıcı adını WebSocket ile eşle
-      ws.username = data.username;
     } else if (data.type === 'logout') {
       activeUsers = activeUsers.filter(user => user !== data.username);
-      clients.delete(data.username); // Kullanıcıyı eşlemeden çıkar
+      const activeUsersMessage = JSON.stringify({ type: 'activeUsers', count: activeUsers.length });
+      wss.clients.forEach((client) => {
+        if (client.readyState === WebSocket.OPEN) {
+          client.send(activeUsersMessage);
+        }
+      });
     } else if (data.type === 'message') {
       // Mesajı tüm kullanıcılara ilet
       wss.clients.forEach((client) => {
@@ -38,26 +53,14 @@ wss.on('connection', (ws) => {
         }
       });
     } else if (data.type === 'list') {
-      // /list komutu gönderildiğinde
-      const listMessage = {
+      // Aktif kullanıcıları listele
+      const userListMessage = JSON.stringify({
         type: 'message',
-        username: 'System',
-        message: `Active users: ${activeUsers.join(', ')}`
-      };
-      wss.clients.forEach((client) => {
-        if (client.readyState === WebSocket.OPEN) {
-          client.send(JSON.stringify(listMessage));
-        }
+        username: 'system',
+        message: 'Active users: ' + activeUsers.join(', ')
       });
+      ws.send(userListMessage);
     }
-
-    // Aktif kullanıcı sayısını güncelle
-    const activeUsersMessage = JSON.stringify({ type: 'activeUsers', count: activeUsers.length });
-    wss.clients.forEach((client) => {
-      if (client.readyState === WebSocket.OPEN) {
-        client.send(activeUsersMessage);
-      }
-    });
   });
 
   ws.on('close', () => {
@@ -65,7 +68,6 @@ wss.on('connection', (ws) => {
     // Bir kullanıcı bağlantıyı kapattığında aktif kullanıcı listesinden çıkarın
     if (ws.username) {
       activeUsers = activeUsers.filter(user => user !== ws.username);
-      clients.delete(ws.username); // Kullanıcıyı eşlemeden çıkar
     }
     const activeUsersMessage = JSON.stringify({ type: 'activeUsers', count: activeUsers.length });
     wss.clients.forEach((client) => {
