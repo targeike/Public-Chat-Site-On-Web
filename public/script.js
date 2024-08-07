@@ -8,6 +8,7 @@ const logoutButton = document.getElementById('logout-button');
 const activeUsersSpan = document.getElementById('active-users');
 const currentTimeSpan = document.getElementById('current-time');
 const listButton = document.getElementById('list-button'); // /list komutu için buton
+const userListButton = document.getElementById('user-list-button'); // User List butonu
 
 let username = '';
 
@@ -28,14 +29,18 @@ socket.addEventListener('message', function (event) {
         chatBox.scrollTop = chatBox.scrollHeight; // En alta kaydır
     } else if (data.type === 'activeUsers') {
         updateActiveUsers(data.count);
+    } else if (data.type === 'error') {
+        alert(data.message);
+    } else if (data.type === 'loginSuccess') {
+        username = data.username;
+        loginContainer.style.display = 'none';
+        chatContainer.style.display = 'flex';
     }
 });
 
 loginButton.addEventListener('click', function () {
     username = usernameInput.value.trim();
     if (username) {
-        loginContainer.style.display = 'none';
-        chatContainer.style.display = 'flex';
         socket.send(JSON.stringify({ type: 'login', username: username }));
     }
 });
@@ -67,6 +72,14 @@ listButton.addEventListener('click', function () {
         type: 'list'
     };
     socket.send(JSON.stringify(listCommand));
+});
+
+// User List butonunu işleme
+userListButton.addEventListener('click', function () {
+    const userListCommand = {
+        type: 'list'
+    };
+    socket.send(JSON.stringify(userListCommand));
 });
 
 function updateActiveUsers(count) {
